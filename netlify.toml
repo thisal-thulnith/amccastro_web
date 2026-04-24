@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA fallback so admin-entry deep links (e.g. /?admin_entry=...) work on Netlify
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

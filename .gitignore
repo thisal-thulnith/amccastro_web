@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+
+# Local env files (never commit real keys)
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea

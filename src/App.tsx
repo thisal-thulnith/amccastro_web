@@ -9,6 +9,7 @@ import {
   Share2, MessageCircle, MapPinned, Lightbulb, ClipboardList, ListChecks, Brain, BarChart3, Phone, CheckSquare, UserPlus
 } from 'lucide-react';
 import { dataStore } from '@/store/dataStore';
+import { useStore } from '@/hooks/useStore';
 import './App.css';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -168,40 +169,28 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   ]);
   const [searchTerm, setSearchTerm] = useState('');
   const [notification, setNotification] = useState('');
-  
-  const [data, setData] = useState({
-    events: dataStore.getEvents(),
-    news: dataStore.getNews(),
-    competitions: dataStore.getCompetitions(),
-    gallery: dataStore.getGallery(),
-    team: dataStore.getTeam(),
-    achievements: dataStore.getAchievements(),
-    messages: dataStore.getMessages(),
-    registrations: dataStore.getRegistrations(),
-    quizzes: dataStore.getQuizzes(),
-    quizAttempts: dataStore.getQuizAttempts(),
-    memberships: dataStore.getMemberships()
-  });
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+  const data = useStore();
 
   const showNotification = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), 3000);
   };
 
-  const loadData = () => {
-    setData({
-      events: dataStore.getEvents(),
-      news: dataStore.getNews(),
-      competitions: dataStore.getCompetitions(),
-      gallery: dataStore.getGallery(),
-      team: dataStore.getTeam(),
-      achievements: dataStore.getAchievements(),
-      messages: dataStore.getMessages(),
-      registrations: dataStore.getRegistrations(),
-      quizzes: dataStore.getQuizzes(),
-      quizAttempts: dataStore.getQuizAttempts(),
-      memberships: dataStore.getMemberships()
-    });
+  const handleImageUpload = async (fieldName: string, file: File | null) => {
+    if (!file) return;
+    setUploadingField(fieldName);
+    try {
+      const url = await dataStore.uploadImage(file);
+      setFormData((prev) => ({ ...prev, [fieldName]: url }));
+      showNotification('Image uploaded!');
+    } catch (err) {
+      console.error(err);
+      showNotification('Image upload failed.');
+    } finally {
+      setUploadingField(null);
+    }
   };
 
   const handleDelete = (type: string, id: string) => {
@@ -220,12 +209,11 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       case 'quizAttempts': dataStore.deleteQuizAttempt(id); break;
       case 'memberships': dataStore.deleteMembership(id); break;
     }
-    loadData();
     showNotification('Item deleted successfully!');
   };
 
   const handleSave = () => {
-    let item = { ...formData, id: editingItem?.id || Date.now().toString() };
+    let item: Record<string, any> = { ...formData, id: editingItem?.id || Date.now().toString() };
     let quizPayload = quizQuestions;
 
     if (activeTab === 'competitions') {
@@ -274,7 +262,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setEditingItem(null);
     setFormData({});
     setQuizQuestions([{ id: 'q-temp-1', question: '', options: ['', '', '', ''], correctIndex: 0 }]);
-    loadData();
     showNotification('Item saved successfully!');
   };
 
@@ -327,7 +314,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           { name: 'location', label: 'Location', type: 'text', icon: MapPin },
           { name: 'category', label: 'Category', type: 'select', options: ['workshop', 'observation', 'competition', 'other'], icon: Target },
           { name: 'description', label: 'Description', type: 'textarea', icon: FileText },
-          { name: 'image', label: 'Image URL', type: 'text', icon: Image },
+          { name: 'image', label: 'Image', type: 'image', icon: Image },
         ];
       case 'news':
         return [
@@ -335,7 +322,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           { name: 'date', label: 'Date', type: 'date', icon: Calendar },
           { name: 'category', label: 'Category', type: 'text', icon: Target },
           { name: 'description', label: 'Description', type: 'textarea', icon: FileText },
-          { name: 'image', label: 'Image URL', type: 'text', icon: Image },
+          { name: 'image', label: 'Image', type: 'image', icon: Image },
         ];
       case 'competitions':
         return [
@@ -343,6 +330,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           { name: 'deadline', label: 'Deadline', type: 'date', icon: Calendar },
           { name: 'description', label: 'Description', type: 'textarea', icon: FileText },
           { name: 'categories', label: 'Categories (comma separated)', type: 'text', icon: ListChecks },
+          { name: 'image', label: 'Image', type: 'image', icon: Image },
           { name: 'rulesLink', label: 'Rules Link', type: 'text', icon: BookOpen },
           { name: 'submissionLink', label: 'Submission Link', type: 'text', icon: UploadIcon },
         ];
@@ -361,7 +349,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         ];
       case 'gallery':
         return [
-          { name: 'src', label: 'Image URL', type: 'text', icon: Image },
+          { name: 'src', label: 'Image', type: 'image', icon: Image },
           { name: 'alt', label: 'Alt Text', type: 'text', icon: FileText },
           { name: 'category', label: 'Category', type: 'text', icon: Target },
         ];
@@ -630,19 +618,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => {
-                                  dataStore.saveRegistration({ ...reg, status: 'approved' });
-                                  loadData();
-                                }}
+                                onClick={() => dataStore.saveRegistration({ ...reg, status: 'approved' })}
                                 className="px-3 py-1 text-xs rounded-lg bg-[#39FF14]/10 text-[#39FF14] hover:bg-[#39FF14]/20"
                               >
                                 Approve
                               </button>
                               <button
-                                onClick={() => {
-                                  dataStore.saveRegistration({ ...reg, status: 'rejected' });
-                                  loadData();
-                                }}
+                                onClick={() => dataStore.saveRegistration({ ...reg, status: 'rejected' })}
                                 className="px-3 py-1 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
                               >
                                 Reject
@@ -699,19 +681,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => {
-                                dataStore.saveMembership({ ...member, status: 'approved' });
-                                loadData();
-                              }}
+                              onClick={() => dataStore.saveMembership({ ...member, status: 'approved' })}
                               className="px-3 py-1 text-xs rounded-lg bg-[#39FF14]/10 text-[#39FF14] hover:bg-[#39FF14]/20"
                             >
                               Approve
                             </button>
                             <button
-                              onClick={() => {
-                                dataStore.saveMembership({ ...member, status: 'rejected' });
-                                loadData();
-                              }}
+                              onClick={() => dataStore.saveMembership({ ...member, status: 'rejected' })}
                               className="px-3 py-1 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
                             >
                               Reject
@@ -896,14 +872,40 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       ))}
                     </select>
                   ) : field.type === 'textarea' ? (
-                    <textarea 
+                    <textarea
                       value={formData[field.name] || ''}
                       onChange={(e) => setFormData({...formData, [field.name]: e.target.value})}
                       className="input-field w-full h-24 resize-none"
                       placeholder={`Enter ${field.label.toLowerCase()}`}
                     />
+                  ) : field.type === 'image' ? (
+                    <div className="space-y-2">
+                      {formData[field.name] && (
+                        <img
+                          src={formData[field.name]}
+                          alt="preview"
+                          className="w-full max-h-40 object-cover rounded-lg border border-[rgba(244,246,250,0.1)]"
+                        />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(field.name, e.target.files?.[0] ?? null)}
+                        className="input-field w-full text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-[#39FF14]/10 file:text-[#39FF14] file:cursor-pointer"
+                      />
+                      {uploadingField === field.name && (
+                        <p className="text-xs text-[#A7B0C8]">Uploading…</p>
+                      )}
+                      <input
+                        type="text"
+                        value={formData[field.name] || ''}
+                        onChange={(e) => setFormData({...formData, [field.name]: e.target.value})}
+                        className="input-field w-full text-xs"
+                        placeholder="…or paste an image URL"
+                      />
+                    </div>
                   ) : (
-                    <input 
+                    <input
                       type={field.type}
                       value={formData[field.name] || ''}
                       onChange={(e) => setFormData({...formData, [field.name]: e.target.value})}
@@ -1000,7 +1002,8 @@ function MainWebsite() {
     sourceTitle: ''
   });
   const [quizParticipant, setQuizParticipant] = useState({ name: '', email: '' });
-  const quizzes = dataStore.getQuizzes();
+  const store = useStore();
+  const quizzes = store.quizzes;
   const [activeQuizId, setActiveQuizId] = useState(quizzes[0]?.id || '');
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [showQuizModal, setShowQuizModal] = useState(false);
@@ -1058,11 +1061,11 @@ function MainWebsite() {
     { label: 'Contact', href: '#contact', icon: Mail },
   ];
 
-  const events = dataStore.getEvents();
-  const news = dataStore.getNews();
-  const gallery = dataStore.getGallery();
-  const team = dataStore.getTeam();
-  const competitions = dataStore.getData().competitions;
+  const events = store.events;
+  const news = store.news;
+  const gallery = store.gallery;
+  const team = store.team;
+  const competitions = store.competitions;
   const activeQuiz = quizzes.find((q: any) => q.id === activeQuizId);
 
   useEffect(() => {
@@ -2070,6 +2073,10 @@ function App() {
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
   };
+
+  useEffect(() => {
+    void dataStore.init();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
